@@ -74,7 +74,7 @@ while True:
     #! Receiving data ---------------------------------------------------
 
     #? Send data to the ESP32 -------------------------------------------
-
+ 
     if espIP is not None:
         #check if "s" is pressed
         if cv2.waitKey(1) & 0xFF == ord('s'):
