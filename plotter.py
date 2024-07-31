@@ -1,5 +1,6 @@
 
 import numpy as np
+
 #import pytorch
 import torch
 import torch.nn as nn
@@ -153,10 +154,15 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
         grid_x = int(round(x / CELL_SIZE) + map_width / 2)
         grid_y = int(round(y / CELL_SIZE) + map_height / 2)
 
-        # Check if the indices are within the grid bounds
+        '''# Check if the indices are within the grid bounds
         if 0 <= grid_x < map_width and 0 <= grid_y < map_height:
             # Mark the cell as occupied
-            occupancy_grid[grid_y, grid_x] = alpha * occupancy_grid[grid_y, grid_x] + (1 - alpha) * 1
+            occupancy_grid[grid_y, grid_x] = alpha * occupancy_grid[grid_y, grid_x] + (1 - alpha) * 1'''
+        
+        # Check if the indices are within the grid bounds
+        if 0 <= grid_x < map_height and 0 <= grid_y < map_width:
+            # Mark the cell as occupied
+            occupancy_grid[grid_x, grid_y] = alpha * occupancy_grid[grid_x, grid_y] + (1 - alpha) * 1
 
     return occupancy_grid
 
@@ -218,12 +224,16 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
         # Get the points along the ray from the robot to the wall
         points = bresenham(robot_grid_x, robot_grid_y, grid_x, grid_y)
 
-        for px, py in points:
+        '''for px, py in points:
             if 0 <= px < map_width and 0 <= py < map_height:
-                free_space_grid[py, px] = alpha * free_space_grid[py, px] + (1 - alpha) * 1
+                free_space_grid[py, px] = alpha * free_space_grid[py, px] + (1 - alpha) * 1'''
+
+        for px, py in points:
+            if 0 <= px < map_height and 0 <= py < map_width:
+                free_space_grid[px, py] = alpha * free_space_grid[px, py] + (1 - alpha) * 1
 
     #check if robot is in the grid, if not return None
-    if robot_grid_x < 0 or robot_grid_x >= map_width or robot_grid_y < 0 or robot_grid_y >= map_height:
+    if robot_grid_x < 0 or robot_grid_x >= map_height or robot_grid_y < 0 or robot_grid_y >= map_width:
         robot_cell = None
     else:
         robot_cell = (robot_grid_x, robot_grid_y)    

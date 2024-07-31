@@ -43,6 +43,10 @@ def add_grid_lines_and_markings(frame, map_width, map_height, display_scale, gui
 
 def process_frame(frame,colormap,robot_cell=None, robot_rotation=None, display_scale=8, guide_color=(225, 86, 43)):
 
+    '''
+    Input --> 2D Matrix (values 0 - 1)
+    Output --> 2D Matrix (values 0 - 255) with grid lines
+    '''
     # Normalize the frame to 0-255 for proper grayscale display
     frame_normalized = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX)
 
@@ -55,18 +59,73 @@ def process_frame(frame,colormap,robot_cell=None, robot_rotation=None, display_s
     #add robot cell
     if(robot_cell):
         robot_pose_grid_x, robot_pose_grid_y = robot_cell
-        frame_normalized[robot_pose_grid_y, robot_pose_grid_x] = [0, 0, 255]
+        frame_normalized[robot_pose_grid_x, robot_pose_grid_y] = [0, 0, 255]
+        
+        '''
         #draw a small arrow to indicate the robot orientation
         if(robot_rotation):
             robot_rotation = robot_rotation + np.pi/2
             arrow_length = 5
-            arrow_x = int(arrow_length * np.cos(robot_rotation))
-            arrow_y = int(arrow_length * np.sin(robot_rotation))
-            cv2.arrowedLine(frame_normalized, (robot_pose_grid_x, robot_pose_grid_y), (robot_pose_grid_x + arrow_x, robot_pose_grid_y + arrow_y), (0, 0, 255), 1)
-
+            arrow_x = int(arrow_length * np.sin(robot_rotation))
+            arrow_y = int(arrow_length * np.cos(robot_rotation))
+            cv2.arrowedLine(frame_normalized, (robot_pose_grid_y, robot_pose_grid_x), (robot_pose_grid_y + arrow_y, robot_pose_grid_x + arrow_x), (0, 0, 255), 1)
+        '''
     # Flip the frame vertically
-    frame_flipped = cv2.flip(frame_normalized, 0)
+    #frame_flipped = cv2.flip(frame_normalized, 0)
+    
+    #rotate 90 degrees counter clockwise
+    frame_flipped = cv2.rotate(frame_normalized, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
+    #resize
+    frame_flipped = cv2.resize(frame_flipped, (frame.shape[1] * display_scale, frame.shape[0] * display_scale), interpolation=cv2.INTER_NEAREST)
+    
+    # Add grid lines and markings
+    frame_flipped = add_grid_lines_and_markings(frame_flipped, frame.shape[1], frame.shape[0], display_scale, guide_color)
+
+    return frame_flipped
+
+def process_frame_path(frame,colormap,robot_cell=None,robot_rotation=None,end_cell=None, path = None, display_scale=8, guide_color=(225, 86, 43)):
+
+    '''
+    Input --> 2D Matrix (values 0 - 1)
+    Output --> 2D Matrix (values 0 - 255) with grid lines
+    '''
+    # Normalize the frame to 0-255 for proper grayscale display
+    frame_normalized = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX)
+
+    # Convert to uint8 type for imshow
+    frame_normalized = np.uint8(frame_normalized)
+
+    # Apply the colormap
+    frame_normalized = cv2.applyColorMap(frame_normalized, colormap)
+
+    #add path
+    if(path):
+        for cell in path:
+            cell_x, cell_y = cell
+            frame_normalized[cell_x, cell_y] = [0, 0, 0]
+    #add robot cell
+    if(robot_cell):
+        robot_pose_grid_x, robot_pose_grid_y = robot_cell
+        frame_normalized[robot_pose_grid_x, robot_pose_grid_y] = [0, 0, 255]
+        
+        '''#draw a small arrow to indicate the robot orientation
+        if(robot_rotation):
+            robot_rotation = robot_rotation + np.pi/2
+            arrow_length = 5
+            arrow_x = int(arrow_length * np.sin(robot_rotation))
+            arrow_y = int(arrow_length * np.cos(robot_rotation))
+            cv2.arrowedLine(frame_normalized, (robot_pose_grid_x, robot_pose_grid_y), (robot_pose_grid_x + arrow_x, robot_pose_grid_y + arrow_y), (0, 0, 255), 1)
+        '''
+    #add end cell
+    if(end_cell):
+        end_pose_grid_x, end_pose_grid_y = end_cell
+        #purple dot (goal)
+        frame_normalized[end_pose_grid_x, end_pose_grid_y] = [255, 0, 255]
+
+    #rotate 90 degrees counter clockwise
+    frame_flipped = cv2.rotate(frame_normalized, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    
     #resize
     frame_flipped = cv2.resize(frame_flipped, (frame.shape[1] * display_scale, frame.shape[0] * display_scale), interpolation=cv2.INTER_NEAREST)
     
