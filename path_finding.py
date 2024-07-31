@@ -20,8 +20,25 @@ def get_neighbors(grid, cell, map_height, map_width):
 
     return neighbors
 
-def cost(current_cell, neighbor, grid):
-    return 0.1 + round(1 - grid[neighbor],2)
+def cost(current_cell, neighbor, free_space_grid):
+
+    if(current_cell.parent):
+        parent = current_cell.parent.value
+    else:
+        parent = current_cell.value
+
+    current = current_cell.value
+
+    #check if direction has not changed
+    direction1 = (parent[0] - current[0], parent[1] - current[1])
+    direction2 = (current[0] - neighbor[0], current[1] - neighbor[1])
+
+    if direction1 == direction2:
+        penalty = 0.1
+    else:
+        penalty = 0.5
+
+    return penalty + round(1 - free_space_grid[neighbor],2)
 
 def heuristic(current_cell, end_cell):
     return abs(current_cell[0] - end_cell[0]) + abs(current_cell[1] - end_cell[1])
@@ -85,7 +102,7 @@ def astar(start_cell, end_cell, grid, map_height, map_width):
             while current_node:
                 path.append(current_node.value)
                 current_node = current_node.parent
-            return path[::-1]
+            return path[::-1], simplify_path(path[::-1])
 
         # Get the neighbors of the current node
         neighbors = get_neighbors(grid, current_node.value, map_height, map_width)
@@ -93,7 +110,7 @@ def astar(start_cell, end_cell, grid, map_height, map_width):
         for neighbor in neighbors:
 
             # Create the neighbor node
-            neighbor_node = node(neighbor, parent=current_node, cost=current_node.cost + cost(current_node.value, neighbor, grid) + heuristic(neighbor, end_cell))
+            neighbor_node = node(neighbor, parent=current_node, cost=current_node.cost + cost(current_node, neighbor, grid) + heuristic(neighbor, end_cell))
 
             # Check if the neighbor is in the visited list
             if neighbor_node in visited:
@@ -107,4 +124,28 @@ def astar(start_cell, end_cell, grid, map_height, map_width):
                 for node_ in unvisited:
                     if node_ == neighbor_node and node_.cost > neighbor_node.cost:
                         node_ = neighbor_node
-    return None
+    return None, None
+
+#! Movement functions ----------------------------------------------
+
+def simplify_path(path):
+    if not path:
+        return []
+
+    simplified_path = []
+    current_direction = None
+
+    for i in range(1, len(path)):
+        prev_cell = path[i - 1]
+        current_cell = path[i]
+
+        # Calculate the direction of movement
+        direction = (current_cell[0] - prev_cell[0], current_cell[1] - prev_cell[1])
+
+        if direction != current_direction:
+            simplified_path.append(prev_cell)
+            current_direction = direction
+
+    simplified_path.append(path[-1])
+    
+    return simplified_path

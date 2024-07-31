@@ -79,3 +79,47 @@ def right(degree):
         "t": time,
         "s": 200
     }
+
+def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=10, distance_tolerance=10):
+
+    if(len(simplified_path) < 2):
+        return None
+    
+    print("\nMoving ----------------------------------")
+    print("simplified_path: ", simplified_path)
+
+    start_cell = simplified_path[0]
+    end_cell = simplified_path[1]
+
+    print("start_cell: ", start_cell)
+    print("end_cell: ", end_cell)
+
+    # target rotation
+    target_rotation = np.arctan2(end_cell[1] - start_cell[1], end_cell[0] - start_cell[0]) - np.pi / 2
+    target_rotation = np.rad2deg(target_rotation)
+
+    print("robot_rotation: ", robot_rotation)
+    print("target_rotation: ", target_rotation)
+
+    # Calculate the angle to turn
+    angle = target_rotation - robot_rotation
+    print("angle to turn: ", angle)
+
+    # Calculate the distance to travel
+    distance = ((end_cell[0] - start_cell[0]) ** 2 + (end_cell[1] - start_cell[1]) ** 2) ** 0.5
+
+    print("distance: ", distance)
+    print("-----------------------------------------\n")
+
+    # Determine the direction of movement (angle is w.r.t the positive x-axis)
+    if angle > angle_tolerance:
+        command = left(abs(angle))
+    elif angle < -angle_tolerance:
+        command = right(abs(angle))
+    elif distance > distance_tolerance:
+        command = forward(distance)
+    elif distance < -distance_tolerance:
+        command = backward(abs(distance))
+    else:
+        command = None
+    return command

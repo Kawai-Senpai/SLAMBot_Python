@@ -6,6 +6,7 @@ import cv2
 from plotter import plot, transform_points, transform_points_inverse, transform_matrix, update_occupancy_grid, update_free_space_grid
 from particle_filter import icp
 from openCV_display import process_frame, process_frame_path
+from movement import generate_movement_commands
 from path_finding import astar
 import threading
 import keyboard
@@ -81,6 +82,13 @@ end_cell = (0, 0)
 #! Path ----------------------------
 
 path = None
+simplified_path = None
+
+#! Movement ------------------------
+
+wait_time = 1  #seconds
+
+#! Threads --------------------------
 
 class UpdateGrids(threading.Thread):
 
@@ -180,6 +188,9 @@ class UpdateGrids(threading.Thread):
                 #* Update the free space grid map ----------------------------------
                 free_space_grid, robot_cell, robot_rotation = update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_SIZE, free_space_grids, alpha=0.9)
 
+                print("\nCurrent Robot Cell: ", robot_cell)
+                print("Current Robot Rotation: ", robot_rotation , "\n")
+
                 # Update past free space grids
                 free_space_grids.append(free_space_grid)
                 if(len(free_space_grids) > WINDOW_SIZE):
@@ -208,6 +219,7 @@ class Display(threading.Thread):
             global robot_rotation
             global end_cell
             global path
+            global simplified_path
 
             while True:
 
@@ -220,7 +232,8 @@ class Display(threading.Thread):
 
                     processed_occupancy_grid = process_frame(occupancy_grid, cv2.COLORMAP_JET, robot_cell, robot_rotation, display_scale, guide_color)
                     processed_free_space_grid = process_frame(free_space_grid, cv2.COLOR_GRAY2BGR, robot_cell, robot_rotation, display_scale, guide_color)
-                    processed_path_grid = process_frame_path(free_space_grid, cv2.COLOR_BGR2GRAY, robot_cell, robot_rotation, end_cell, path, display_scale, guide_color)
+                    processed_path_grid = process_frame_path(free_space_grid, cv2.COLOR_BGR2GRAY, robot_cell, robot_rotation, end_cell, simplified_path, display_scale, guide_color)
+                    
                     # Display the occupancy grid map
                     cv2.imshow('Occupancy Grid Map', processed_occupancy_grid)
                     cv2.imshow('Free Space Grid Map', processed_free_space_grid)
@@ -280,25 +293,46 @@ class PathFinder(threading.Thread):
         global end_coordinate
         global end_cell
         global path
+        global simplified_path
 
         while True:
             end_x, end_y = end_coordinate
             # Calculate grid indices for the end
             end_cell = (int(round(end_x / CELL_SIZE) + map_width / 2), int(round(end_y / CELL_SIZE) + map_height / 2))
-            path = astar(robot_cell, end_cell, free_space_grids[-1], map_height, map_width)
-
+            path, simplified_path = astar(robot_cell, end_cell, free_space_grids[-1], map_height, map_width)
+            
     def send_data(self, payload):
         if espIP is not None:
             payload = json.dumps(payload)
             print(f"Sending data to ESP32: {payload}")
             serverSocket.sendto(payload.encode('utf-8'), (espIP, espPort))
 
+class Movement(threading.Thread):
+        
+        def __init__(self):
+            threading.Thread.__init__(self)
+        
+        def run(self):
+
+            global simplified_path
+            global wait_time
+            global robot_rotation
+
+            while True:
+                if simplified_path:
+                    command = generate_movement_commands(simplified_path, robot_rotation)
+                    print("Command: ", command)
+                    if command:
+                        time.sleep(command['t']/1000+wait_time)
+
 update_grid_thread = UpdateGrids()
 display_thread = Display()
 send_data_thread = SendData()
 path_finder_thread = PathFinder()
+movement_thread = Movement()
 
 update_grid_thread.start()
 display_thread.start()
 send_data_thread.start()
 path_finder_thread.start()
+movement_thread.start()

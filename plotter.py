@@ -209,8 +209,11 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
     if not isinstance(robot_pose, np.ndarray):
         robot_pose = np.array(robot_pose)
     robot_x, robot_y = robot_pose[:2, 2]
+
     #robot rotation
     robot_rotation = np.arctan2(robot_pose[1, 0], robot_pose[0, 0])
+    #Convert to degrees
+    robot_rotation = np.rad2deg(robot_rotation)
 
     # Calculate grid indices for the robot
     robot_grid_x = int(round(robot_x / CELL_SIZE) + map_width / 2)

@@ -84,7 +84,7 @@ def process_frame(frame,colormap,robot_cell=None, robot_rotation=None, display_s
 
     return frame_flipped
 
-def process_frame_path(frame,colormap,robot_cell=None,robot_rotation=None,end_cell=None, path = None, display_scale=8, guide_color=(225, 86, 43)):
+def process_frame_path(frame, colormap, robot_cell=None, robot_rotation=None, end_cell=None, path = None, display_scale=8, guide_color=(225, 86, 43)):
 
     '''
     Input --> 2D Matrix (values 0 - 1)
@@ -99,11 +99,19 @@ def process_frame_path(frame,colormap,robot_cell=None,robot_rotation=None,end_ce
     # Apply the colormap
     frame_normalized = cv2.applyColorMap(frame_normalized, colormap)
 
-    #add path
+    #add path as lines (Grey color)
+    if(path):
+        for i in range(len(path) - 1):
+            cell1_x, cell1_y = path[i]
+            cell2_x, cell2_y = path[i + 1]
+            cv2.line(frame_normalized, (cell1_y, cell1_x), (cell2_y, cell2_x), (128, 128, 128), 1)
+
+    #add path as points
     if(path):
         for cell in path:
             cell_x, cell_y = cell
-            frame_normalized[cell_x, cell_y] = [0, 0, 0]
+            frame_normalized[cell_x, cell_y] = [255, 255, 255]
+
     #add robot cell
     if(robot_cell):
         robot_pose_grid_x, robot_pose_grid_y = robot_cell
