@@ -5,6 +5,7 @@
 #include <VL53L0X.h>
 
 //! Servo -----------------------------------------
+
 #define SERVO_PIN 32
 #define SERVO_START 0
 #define SERVO_END 100
@@ -14,10 +15,12 @@
 #define SERVO_ERRORED_END 88
 
 //! Ultrasonic Sensor -----------------------------
+
 #define MIN_DISTANCE 3
 #define MAX_DISTANCE 100
 
 //! LN298N Motor ----------------------------------
+
 #define PIN1 23
 #define PIN2 19
 #define PIN3 18
@@ -28,6 +31,10 @@
 const int freq = 5000; // Frequency in Hz
 const int ledChannel = 3; // PWM channel
 const int resolution = 8; // PWM resolution (8-bit)
+
+bool moving = false;
+
+//! TOF Sensor -------------------------------------
 
 VL53L0X sensor;
 
@@ -62,6 +69,7 @@ struct Move
 };
 
 //! Servo -----------------------------------------
+
 Servo servoMotor;
 bool forward = true;
 
@@ -177,36 +185,66 @@ void udpTask(void *pvParameters) {
 }
 
 void scanMoveTask(void *pvParameters) {
+
   for (;;) {
-    if (forward) {
-      forward = false;
-      //! Forward Motion -------------------------------
-      // rotates from 0 degrees to n degrees
 
-      for (int pos = SERVO_START; pos <= SERVO_END; pos += 1) {
-        // in steps of 1 degree
-        servoMotor.write(flipAngle(pos));
-        front[pos] = getDistence();
-        // Serial.println(front[pos]);
+    //Only scan if the robot is not moving
+    if(!moving)
+    {
+      if (forward) {
+        forward = false;
+        //! Forward Motion -------------------------------
+        // rotates from 0 degrees to n degrees
+
+        for (int pos = SERVO_START; pos <= SERVO_END; pos += 1) {
+          // in steps of 1 degree
+          servoMotor.write(flipAngle(pos));
+          front[pos] = getDistence();
+          // Serial.println(front[pos]);
+
+          // if the robot is moving, stop the servo
+          if(moving)
+          {
+            break;
+          }
+        }
+
+        // Do not send data if the robot is moving
+        if(!moving)
+        {
+          sendUDP(toJson(front));
+          delay(SERVO_WAIT);
+        }
+
+      } 
+      else 
+      {
+        forward = true;
+
+        //! Backward Motion ------------------------------
+        // rotates from n degrees to 0 degrees
+
+        for (int pos = SERVO_END; pos >= SERVO_START; pos -= 1) {
+          servoMotor.write(flipAngle(pos));
+          front[pos] = getDistence();
+          // Serial.println(front[pos]);
+
+          // if the robot is moving, stop the servo
+          if(moving)
+          {
+            break;
+          }
+        }
+
+        // Do not send data if the robot is moving
+        if(!moving)
+        {
+          sendUDP(toJson(front));
+          delay(SERVO_WAIT);
+        }
       }
-
-      sendUDP(toJson(front));
-
-      delay(SERVO_WAIT);
-    } else {
-      forward = true;
-      //! Backward Motion ------------------------------
-      // rotates from n degrees to 0 degrees
-      for (int pos = SERVO_END; pos >= SERVO_START; pos -= 1) {
-        servoMotor.write(flipAngle(pos));
-        front[pos] = getDistence();
-        // Serial.println(front[pos]);
-      }
-
-      sendUDP(toJson(front));
-
-      delay(SERVO_WAIT);
     }
+
     vTaskDelay(10 / portTICK_PERIOD_MS);  // Add a small delay to prevent task from hogging the CPU
   }
 }
@@ -290,6 +328,7 @@ int getDistence()
 
 void moveForward(int duration, int speed)
 {
+  moving = true;
   digitalWrite(PIN1, LOW);
   digitalWrite(PIN2, HIGH);
   digitalWrite(PIN3, LOW);
@@ -300,10 +339,12 @@ void moveForward(int duration, int speed)
   delay(duration);
 
   stop();
+  moving = false;
 }
 
 void moveBackward(int duration, int speed)
 {
+  moving = true;
   digitalWrite(PIN1, HIGH);
   digitalWrite(PIN2, LOW);
   digitalWrite(PIN3, HIGH);
@@ -314,10 +355,12 @@ void moveBackward(int duration, int speed)
   delay(duration);
 
   stop();
+  moving = false;
 }
 
 void moveRight(int duration, int speed)
 {
+  moving = true;
   digitalWrite(PIN1, HIGH);
   digitalWrite(PIN2, LOW);
   digitalWrite(PIN3, LOW);
@@ -328,10 +371,12 @@ void moveRight(int duration, int speed)
   delay(duration);
 
   stop();
+  moving = false;
 }
 
 void moveLeft(int duration, int speed)
 {
+  moving = true;
   digitalWrite(PIN1, LOW);
   digitalWrite(PIN2, HIGH);
   digitalWrite(PIN3, HIGH);
@@ -342,6 +387,7 @@ void moveLeft(int duration, int speed)
   delay(duration);
 
   stop();
+  moving = false;
 }
 
 void stop()
