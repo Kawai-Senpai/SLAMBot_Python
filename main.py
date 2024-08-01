@@ -313,9 +313,12 @@ class PathFinder(threading.Thread):
         global simplified_path
 
         while True:
+
+            #* Calculating goal position (cell) in free space grid
             end_x, end_y = end_coordinate
             # Calculate grid indices for the end
             end_cell = (int(round(end_x / CELL_SIZE) + map_width / 2), int(round(end_y / CELL_SIZE) + map_height / 2))
+            
             path, simplified_path = astar(robot_cell, end_cell, free_space_grids[-1], map_height, map_width)
             
     def send_data(self, payload):

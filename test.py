@@ -7,3 +7,32 @@ coordinates = plot(reading, 40, 140, 101) # -----> [(x1, y1), (x2, y2), ... ]
 for i in coordinates:
     #print in red
     print("\033[91m", i)
+
+'''import time
+import threading
+
+class A(threading.Thread):
+        
+        def __init__(self):
+            threading.Thread.__init__(self)
+
+        def run(self):
+            for i in range(10):
+                print("A --> ", i)
+                time.sleep(1)
+
+class B(threading.Thread):
+
+        def __init__(self):
+            threading.Thread.__init__(self)
+
+        def run(self):
+            for i in range(10):
+                print("B --> ", i)
+                time.sleep(1)
+
+obj_a = A()
+obj_b = B()
+
+obj_a.start()
+obj_b.start()'''

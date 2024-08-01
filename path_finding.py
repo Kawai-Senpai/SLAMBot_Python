@@ -1,8 +1,7 @@
 
 #! A* functions ----------------------------------------------------
 
-# if a cell is given, return the 4-connected neighbors
-# probability  high -----> cost low -----> high priority
+# if a cell is given, return the 4-connected neighbors of the cell
 def get_neighbors(grid, cell, map_height, map_width):
 
     neighbors = []
@@ -20,6 +19,8 @@ def get_neighbors(grid, cell, map_height, map_width):
 
     return neighbors
 
+# depends on the probability of the cell being free + the direction of movement
+# probability  high -----> cost low -----> high priority
 def cost(current_cell, neighbor, free_space_grid):
 
     if(current_cell.parent):
@@ -40,6 +41,7 @@ def cost(current_cell, neighbor, free_space_grid):
 
     return penalty + round(1 - free_space_grid[neighbor],2)
 
+# approximate distance between two cells ( Start ----> End )
 def heuristic(current_cell, end_cell):
     return abs(current_cell[0] - end_cell[0]) + abs(current_cell[1] - end_cell[1])
 
@@ -74,6 +76,8 @@ class node:
     def __eq__(self, o: object) -> bool:
         return self.value == o.value
 
+# Calculate the path from the start cell to the end cell
+# [(x1, y1), (x2, y2), ... , (xn, yn)]
 def astar(start_cell, end_cell, grid, map_height, map_width):
 
     unvisited = []
