@@ -134,6 +134,7 @@ void loop() {
 
 //! Main Functionalities --------------------------
 
+//? Move the robot based on the received data ------
 void udpTask(void *pvParameters) {
   for (;;) {
     //! Receive data from computer --------------------
@@ -184,6 +185,7 @@ void udpTask(void *pvParameters) {
   }
 }
 
+//? Scan the environment and send data -------------
 void scanMoveTask(void *pvParameters) {
 
   for (;;) {
