@@ -79,7 +79,8 @@ model.load_state_dict(torch.load('calibration_model.pth'))
 
 #! Coordinate Conversion ----------------------------------------------------------------
 #? Converts (distance, angle) to (x, y) coordinates ----------------------------------------------
-def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_error = 0, servo_offset = 2.8, body_offset_y = -8, 
+
+def plot(data, front_start, front_end, num_readings, fix_error = 0, servo_offset = 2.8, body_offset_y = 8, 
         min_distance = 3, max_distance = 100):
 
     """
@@ -195,6 +196,7 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
     return occupancy_grid
 
 #? Find points between two coordinates -------------------------------------------------
+
 def bresenham(x0, y0, x1, y1):
     """
     Bresenham's Line Algorithm to generate points between two coordinates.
@@ -222,6 +224,7 @@ def bresenham(x0, y0, x1, y1):
     return points
 
 #? Update Free Space Grid --------------------------------------------------------------
+
 def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_SIZE, free_space_grids, alpha=0.7):
     
     #* Temporal filter to reduce noise ( on past Free Space grids ) ------------------------
@@ -277,6 +280,7 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
     return free_space_grid, robot_cell, robot_rotation
 
 #! Helper Tramsformation Functions --------------------------------------------------------------
+
 def transform_points(T, A):
     return np.dot(T, np.concatenate((A.T, np.ones((1, A.shape[0]))), axis=0)).T[:, :2]
 

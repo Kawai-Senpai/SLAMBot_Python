@@ -148,7 +148,7 @@ class UpdateGrids(threading.Thread):
                 #! Calculations ---------------------------------------------------
 
                 #* Calculate (x, y) coordinates of the LiDAR points ---------------
-                coordinates = plot(data, 40, 140, 220, 320, NUM_READINGS) # -----> [(x1, y1), (x2, y2), ... ]
+                coordinates = plot(data, 40, 140, NUM_READINGS) # -----> [(x1, y1), (x2, y2), ... ]
 
                 #* Mapping & Particle Filtring ------------------------------------
                 if(previous_coordinates):
