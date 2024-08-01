@@ -79,8 +79,28 @@ model.load_state_dict(torch.load('calibration_model.pth'))
 
 #! Coordinate Conversion ----------------------------------------------------------------
 #? Converts (distance, angle) to (x, y) coordinates ----------------------------------------------
-def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_error = 0, servo_offset = 2.8, body_offset_y = 8, 
+def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_error = 0, servo_offset = 2.8, body_offset_y = -8, 
         min_distance = 3, max_distance = 100):
+
+    """
+    Plot the coordinates of the detected objects based on the given data.
+
+    Args:
+        data (dict): A dictionary containing the sensor readings.
+        front_start (float): The starting angle of the front sensor.
+        front_end (float): The ending angle of the front sensor.
+        back_start (float): The starting angle of the back sensor.
+        back_end (float): The ending angle of the back sensor.
+        num_readings (int): The number of sensor readings.
+        fix_error (float, optional): The error to be fixed. Defaults to 0.
+        servo_offset (float, optional): The offset of the servo. Defaults to 2.8.
+        body_offset_y (float, optional): The offset of the body in the y-axis. Defaults to -8.
+        min_distance (float, optional): The minimum distance threshold. Defaults to 3.
+        max_distance (float, optional): The maximum distance threshold. Defaults to 100.
+
+    Returns:
+        zip: A zip object containing the x and y coordinates of the detected objects.
+    """
 
     #! Front - 40 to 140 --------------------------------------------------
     front = np.array(data['f'])
@@ -90,6 +110,7 @@ def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_e
     front = front.unsqueeze(0)
 
     #predict
+    #* Deep learning model to calibrate, filter and adjust incoming scan values
     front = model(front)
     front = front.cpu().detach().numpy()
     front = front[0]
@@ -99,6 +120,7 @@ def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_e
     #convert to cm
     front = front/10
 
+    #*Fix servo offset and error
     front = front + servo_offset + fix_error
     front_min_distance  = min_distance + servo_offset + fix_error
     front_max_distance  = max_distance + servo_offset + fix_error
@@ -112,17 +134,21 @@ def plot(data, front_start, front_end, back_start, back_end, num_readings, fix_e
             angles = np.delete(angles, i)
             front = np.delete(front, i)
 
+    #* Converting Servo measurement into actual distance using trigonometry
     x_coords = -1 * front * np.cos(angles)
     y_coords = front * np.sin(angles) 
 
+    #*Fix body offset and error
     #fix the y offset
     y_coords = y_coords + body_offset_y
 
+    # [x1, x2, x3, ........ ] [y1, y2, y3, ........ ] ----> [(x1, y1), (x2, y2), (x3, y3), ........ ]
     return zip(x_coords, y_coords)
 
 #! Occupancy Grid Mapping --------------------------------------------------------------
 #? Probabilistic Occupancy Grid Mapping (POGM) With Temporal Filtering ----------------------------
 def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.7):
+    
     """
     Update the occupancy grid map based on the given coordinates.
 
@@ -136,7 +162,8 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
     - occupancy_grid: An updated occupancy grid map.
     """
 
-    # Avarage the last N occupancy grids to reduce noise (latest map has the highest weight)
+    #* Temporal filter to reduce noise ( on past occupancy grids ) ------------------------
+    # Avarage the last N occupancy grids to reduce noise (latest map has the highest weight) - weigted average
     if len(occupancy_grids) > 0:
         # Generate increasing weights for each occupancy grid
         weights = np.arange(1, len(occupancy_grids) + 1)
@@ -149,6 +176,7 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
     else:
         occupancy_grid = np.zeros((map_height, map_width))
 
+    #*Plotting probabilistic occupancy grid map ------------------------------------------
     for x, y in coordinates:
         # Calculate grid indices
         grid_x = int(round(x / CELL_SIZE) + map_width / 2)
@@ -196,6 +224,7 @@ def bresenham(x0, y0, x1, y1):
 #? Update Free Space Grid --------------------------------------------------------------
 def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_SIZE, free_space_grids, alpha=0.7):
     
+    #* Temporal filter to reduce noise ( on past Free Space grids ) ------------------------
     if len(free_space_grids) > 0:
         weights = np.arange(1, len(free_space_grids) + 1)
         weighted_grids = [free_space_grids[i] * weights[i] for i in range(len(free_space_grids))]
@@ -204,6 +233,7 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
     else:
         free_space_grid = np.zeros((map_height, map_width))
     
+    #* Plotting robot's current position ( cell ) and rotation -----------------------------
     # Get the robot's position from the homogeneous transformation matrix (3x3)
     #if not numpy array convert
     if not isinstance(robot_pose, np.ndarray):
@@ -219,11 +249,13 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
     robot_grid_x = int(round(robot_x / CELL_SIZE) + map_width / 2)
     robot_grid_y = int(round(robot_y / CELL_SIZE) + map_height / 2)
 
+    #* Plotting wall ( obstacles ) ---------------------------------------------------------
     for x, y in coordinates:
         # Calculate grid indices for the wall
         grid_x = int(round(x / CELL_SIZE) + map_width / 2)
         grid_y = int(round(y / CELL_SIZE) + map_height / 2)
 
+        #* Finding free space cells using bresenham algorithm --------------------------------
         # Get the points along the ray from the robot to the wall
         points = bresenham(robot_grid_x, robot_grid_y, grid_x, grid_y)
 
@@ -231,6 +263,7 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
             if 0 <= px < map_width and 0 <= py < map_height:
                 free_space_grid[py, px] = alpha * free_space_grid[py, px] + (1 - alpha) * 1'''
 
+        #* Plotting probabilistic free space grid map ---------------------------------------
         for px, py in points:
             if 0 <= px < map_height and 0 <= py < map_width:
                 free_space_grid[px, py] = alpha * free_space_grid[px, py] + (1 - alpha) * 1

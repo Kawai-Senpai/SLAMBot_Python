@@ -12,6 +12,7 @@ import threading
 import keyboard
 import time
 
+#? Variables -----------------------
 #! Grid ---------------------------
 
 # Constants
@@ -88,6 +89,7 @@ simplified_path = None
 
 wait_time = 1  #seconds
 
+#? Functions & Classes --------------
 #! Threads --------------------------
 
 class UpdateGrids(threading.Thread):
@@ -123,6 +125,8 @@ class UpdateGrids(threading.Thread):
             #? Receive data from the ESP32 --------------------------------------
 
             try:
+
+                #* Receiving data coming through UDP
                 message, address = serverSocket.recvfrom(bufferSize)
                 message = message.decode('utf-8')  # Decode message to string
                 print(address)
@@ -131,6 +135,7 @@ class UpdateGrids(threading.Thread):
                     espIP = address[0]
                     print(f"ESP32 IP Address: {espIP}")
 
+                #* Parsing Json
                 data = json.loads(message)
                 #print in green color
                 print("\033[92m", "Data: ", data, "\033[0m")
@@ -145,10 +150,13 @@ class UpdateGrids(threading.Thread):
                 #* Calculate (x, y) coordinates of the LiDAR points ---------------
                 coordinates = plot(data, 40, 140, 220, 320, NUM_READINGS) # -----> [(x1, y1), (x2, y2), ... ]
 
+                #* Mapping & Particle Filtring ------------------------------------
                 if(previous_coordinates):
 
                     #! ICP ---------------------------------------------------------
                     #to numpy array
+
+                    #* Considering history to reduce noise and errors
                     A = np.concatenate(previous_coordinates[-WINDOW_SIZE:])
                     B = np.array(list(coordinates))
                     
@@ -161,25 +169,32 @@ class UpdateGrids(threading.Thread):
                         continue
 
                     # Perform ICP
+                    #* ICP ( Particle filtering)
                     T_final, distances, iterations = icp(A, B, max_iterations=icp_iterations, tolerance=icp_tolerance)
+                    
                     #inverse of T
                     T_inv = np.linalg.inv(T_final)
 
                     #New coordinates
+                    #* Fix Robot pose and new coordinates using the transformation matrix
+                    # Fixing coordinates
                     B = transform_points_inverse(T_final, B)
                     coordinates = B
 
                     #new robot pose
                     robot_pose = T_inv
                 
+                #* Storing Each Measurement History -------------------------------
                 # Update past coordinates
+                # Window size determines how many previous measurements to consider
                 previous_coordinates.append(np.array(list(coordinates)))
                 if len(previous_coordinates) > WINDOW_SIZE:
                     previous_coordinates.pop(0)
-
+                
                 #* Update the occupancy grid map ----------------------------------
                 occupancy_grid = update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.9)
 
+                #* Storing the calculated occupancy grid in history ---------------
                 # Update past occupancy grids
                 occupancy_grids.append(occupancy_grid)
                 if(len(occupancy_grids) > WINDOW_SIZE):
@@ -191,6 +206,7 @@ class UpdateGrids(threading.Thread):
                 print("\nCurrent Robot Cell: ", robot_cell)
                 print("Current Robot Rotation: ", robot_rotation , "\n")
 
+                #* Storing the calculated free space grid in history ---------------
                 # Update past free space grids
                 free_space_grids.append(free_space_grid)
                 if(len(free_space_grids) > WINDOW_SIZE):
@@ -234,6 +250,7 @@ class Display(threading.Thread):
                     processed_free_space_grid = process_frame(free_space_grid, cv2.COLOR_GRAY2BGR, robot_cell, robot_rotation, display_scale, guide_color)
                     processed_path_grid = process_frame_path(free_space_grid, cv2.COLOR_BGR2GRAY, robot_cell, robot_rotation, end_cell, simplified_path, display_scale, guide_color)
                     
+                    #* Display ---------------------------------------------------------------
                     # Display the occupancy grid map
                     cv2.imshow('Occupancy Grid Map', processed_occupancy_grid)
                     cv2.imshow('Free Space Grid Map', processed_free_space_grid)

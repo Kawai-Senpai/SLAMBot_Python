@@ -47,15 +47,20 @@ def process_frame(frame,colormap,robot_cell=None, robot_rotation=None, display_s
     Input --> 2D Matrix (values 0 - 1)
     Output --> 2D Matrix (values 0 - 255) with grid lines
     '''
+
+    #* Normalize frame and convert to proper values (0 -255) -------------------------------------
     # Normalize the frame to 0-255 for proper grayscale display
+    # 0 - 1 to 0 - 255
     frame_normalized = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX)
 
+    #* Other Image processing ---------------------------------------------------------------------
     # Convert to uint8 type for imshow
     frame_normalized = np.uint8(frame_normalized)
 
     # Apply the colormap
     frame_normalized = cv2.applyColorMap(frame_normalized, colormap)
 
+    #* Marking robot's position and orientation by a arrow / line -------------------------------------
     #add robot cell
     if(robot_cell):
         robot_pose_grid_x, robot_pose_grid_y = robot_cell
@@ -76,6 +81,7 @@ def process_frame(frame,colormap,robot_cell=None, robot_rotation=None, display_s
     #rotate 90 degrees counter clockwise
     frame_flipped = cv2.rotate(frame_normalized, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
+    #* Adding Grid Lines and Resizing ---------------------------------------------------------------
     #resize
     frame_flipped = cv2.resize(frame_flipped, (frame.shape[1] * display_scale, frame.shape[0] * display_scale), interpolation=cv2.INTER_NEAREST)
     
