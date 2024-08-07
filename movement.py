@@ -80,6 +80,26 @@ def right(degree):
         "s": 200
     }
 
+def make_init_pose(x, y, theta):
+    
+        '''
+        Input: x (float) - x-coordinate of the robot
+            y (float) - y-coordinate of the robot
+            theta (float) - angle of the robot wtr the x-axis
+        Output: init_pose (np.array) - initial pose of the robot
+        '''
+    
+        # make the initial pose
+        init_pose = np.identity(3)
+        init_pose[0, 2] = x
+        init_pose[1, 2] = y
+        init_pose[0, 0] = np.cos(np.deg2rad(theta))
+        init_pose[0, 1] = -np.sin(np.deg2rad(theta))
+        init_pose[1, 0] = np.sin(np.deg2rad(theta))
+        init_pose[1, 1] = np.cos(np.deg2rad(theta))
+    
+        return init_pose
+
 def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=10, distance_tolerance=10):
 
     if(len(simplified_path) < 2):
@@ -114,12 +134,20 @@ def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=
     # Determine the direction of movement (angle is w.r.t the positive x-axis)
     if angle > angle_tolerance:
         command = left(abs(angle))
+        #init_pose w.r.t previous pose
+        init_pose = make_init_pose(0, 0, angle)
     elif angle < -angle_tolerance:
         command = right(abs(angle))
+        #init_pose w.r.t previous pose
+        init_pose = make_init_pose(0, 0, angle)
     elif distance > distance_tolerance:
         command = forward(distance)
+        #init_pose w.r.t previous pose
+        init_pose = make_init_pose(end_cell[0] - start_cell[0], end_cell[1] - start_cell[1], 0)
     elif distance < -distance_tolerance:
         command = backward(abs(distance))
+        #init_pose w.r.t previous pose
+        init_pose = make_init_pose(end_cell[0] - start_cell[0], end_cell[1] - start_cell[1], 0)
     else:
-        command = None
-    return command
+        command = None, None
+    return command, init_pose

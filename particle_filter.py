@@ -73,7 +73,7 @@ def icp(A, B, init_pose=None, max_iterations=100, tolerance=0.01):
         distances: Euclidean distances (errors) of the nearest neighbor
         i: number of iterations to converge
     '''
-
+    
     # get number of dimensions
     m = A.shape[1]
 

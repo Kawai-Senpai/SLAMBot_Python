@@ -68,6 +68,7 @@ print(f"UDP server up and listening on port {localPort}")
 previous_coordinates = []
 coordinates = None
 
+init_pose = None
 robot_pose = (0, 0, 0)  # (x, y, theta)
 robot_pose = np.array([
     [np.cos(robot_pose[2]), -np.sin(robot_pose[2]), robot_pose[0]],
@@ -77,7 +78,7 @@ robot_pose = np.array([
 robot_cell = (0, 0)
 robot_rotation = 0
 
-end_coordinate = (-10, 20)
+end_coordinate = (0, 30)
 end_cell = (0, 0)
 
 #! Path ----------------------------
@@ -87,7 +88,8 @@ simplified_path = None
 
 #! Movement ------------------------
 
-wait_time = 1  #seconds
+wait_time = 5  #seconds - waiting for the robot to reach the target
+wait_to_send = 0.5 #wait time to send data
 
 #? Functions & Classes --------------
 #! Threads --------------------------
@@ -119,6 +121,7 @@ class UpdateGrids(threading.Thread):
         global bufferSize
         global robot_cell
         global robot_rotation
+        global init_pose
 
         while True:
 
@@ -167,10 +170,19 @@ class UpdateGrids(threading.Thread):
                     if B.size == 0:
                         print("Input arrays A and B must not be empty.")
                         continue
+                    
+                    if(init_pose):
+                        
+                        #calculate initial pose w.r.t the robot
+                        init_pose = np.dot(robot_pose, init_pose)
+                        #* ICP ( Particle filtering)
+                        T_final, distances, iterations = icp(A, B, init_pose=init_pose, max_iterations=icp_iterations, tolerance=icp_tolerance)
+                        init_pose = None
 
-                    # Perform ICP
-                    #* ICP ( Particle filtering)
-                    T_final, distances, iterations = icp(A, B, max_iterations=icp_iterations, tolerance=icp_tolerance)
+                    else:
+
+                        #* ICP ( Particle filtering)
+                        T_final, distances, iterations = icp(A, B, max_iterations=icp_iterations, tolerance=icp_tolerance)
                     
                     #inverse of T
                     T_inv = np.linalg.inv(T_final)
@@ -332,18 +344,32 @@ class Movement(threading.Thread):
         def __init__(self):
             threading.Thread.__init__(self)
         
+        def send_data(self, payload):
+            if espIP is not None:
+                payload = json.dumps(payload)
+                print(f"Sending data to ESP32: {payload}")
+                serverSocket.sendto(payload.encode('utf-8'), (espIP, espPort))
+
         def run(self):
 
             global simplified_path
             global wait_time
             global robot_rotation
+            global init_pose
+            global wait_time
 
             while True:
                 if simplified_path:
-                    command = generate_movement_commands(simplified_path, robot_rotation)
-                    print("Command: ", command)
+                    command, approx_pose = generate_movement_commands(simplified_path, robot_rotation)
                     if command:
+                        #print in yellow color
+                        print("\033[93m", "Command: ", command, "\033[0m")
+                        self.send_data(command)
+                        time.sleep(wait_time)
+                        init_pose = approx_pose
                         time.sleep(command['t']/1000+wait_time)
+
+#? Threads, Creating Objects ---------------------------
 
 update_grid_thread = UpdateGrids()
 display_thread = Display()
@@ -351,8 +377,32 @@ send_data_thread = SendData()
 path_finder_thread = PathFinder()
 movement_thread = Movement()
 
+#? Starting Threads -------------------------------------
+
+print("\033[91mStarting threads --------------------------------------------\033[0m")
+print("\033[91mStarting 'update_grid_thread' *******************************\033[0m")
+
+#! Starting thread - that updates the grids
 update_grid_thread.start()
+
+print("\033[91mStarting 'display_thread' **********************************\033[0m")
+
+#! Starting thread - that displays the grids
 display_thread.start()
+
+print("\033[91mStarting 'send_data_thread' ********************************\033[0m")
+
+#! Starting thread - that sends data to the ESP32 (This is for manual control, Not needed for autonomous control)
 send_data_thread.start()
+
+print("\033[91mStarting 'path_finder_thread' ******************************\033[0m")
+
+#! Starting thread - that finds the path
 path_finder_thread.start()
+
+time.sleep(30)
+
+print("\033[91mStarting 'movement_thread' *********************************\033[0m")
+
+#! Starting thread - that moves the robot
 movement_thread.start()
