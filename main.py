@@ -171,16 +171,13 @@ class UpdateGrids(threading.Thread):
                         print("Input arrays A and B must not be empty.")
                         continue
                     
-                    if(init_pose):
-                        
+                    if init_pose is not None:
                         #calculate initial pose w.r.t the robot
                         init_pose = np.dot(robot_pose, init_pose)
                         #* ICP ( Particle filtering)
                         T_final, distances, iterations = icp(A, B, init_pose=init_pose, max_iterations=icp_iterations, tolerance=icp_tolerance)
                         init_pose = None
-
                     else:
-
                         #* ICP ( Particle filtering)
                         T_final, distances, iterations = icp(A, B, max_iterations=icp_iterations, tolerance=icp_tolerance)
                     

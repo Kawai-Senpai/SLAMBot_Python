@@ -39,7 +39,6 @@ int flipAngle(int originalAngle) {
 
 void loop() {
 
-  /*
   // rotates from 0 degrees to 180 degrees
   for (int pos = SERVO_START; pos <= SERVO_END; pos += 1) {
     // in steps of 1 degree
@@ -58,5 +57,4 @@ void loop() {
   }
 
   delay(5000);
-  */
 }

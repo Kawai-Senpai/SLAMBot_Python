@@ -149,5 +149,7 @@ def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=
         #init_pose w.r.t previous pose
         init_pose = make_init_pose(end_cell[0] - start_cell[0], end_cell[1] - start_cell[1], 0)
     else:
-        command = None, None
+        command = None
+        init_pose = None
+    
     return command, init_pose
