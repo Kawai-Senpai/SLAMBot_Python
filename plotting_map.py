@@ -32,6 +32,7 @@ probability_filter_extent = 2 #! Should be less than WINDOW_SIZE
 
 erotion_extent = 2
 erosion_kernel = np.ones((3, 3), np.uint8)
+erosion_contritubion = 0.1
 
 #ICP
 icp_iterations = 1
@@ -208,7 +209,7 @@ class UpdateGrids(threading.Thread):
 
                     for i in range(erotion_extent):
                         #Erode the map
-                        occupancy_grids[i] = (occupancy_grids[i] + cv2.erode(occupancy_grids[i], erosion_kernel, iterations=1))/2
+                        occupancy_grids[i] = (occupancy_grids[i]*(1-erosion_contritubion)) + (cv2.erode(occupancy_grids[i], erosion_kernel, iterations=1)*erosion_contritubion)
 
                     for i in range(probability_filter_extent):
                         #Remove low probability cells from older grids
