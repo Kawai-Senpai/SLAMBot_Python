@@ -100,7 +100,7 @@ def make_init_pose(x, y, theta):
     
         return init_pose
 
-def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=10, distance_tolerance=10):
+def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=10, distance_tolerance=3):
 
     if(len(simplified_path) < 2):
         return None
@@ -122,7 +122,7 @@ def generate_movement_commands(simplified_path, robot_rotation, angle_tolerance=
     print("target_rotation: ", target_rotation)
 
     # Calculate the angle to turn
-    angle = target_rotation - robot_rotation
+    angle = target_rotation - robot_rotation #angle w.r.t the positive x-axis
     print("angle to turn: ", angle)
 
     # Calculate the distance to travel

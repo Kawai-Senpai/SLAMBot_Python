@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from plotter import plot
+from scipy.linalg import logm, expm
 
 def best_fit_transform(A, B):
     '''
@@ -73,7 +74,10 @@ def icp(A, B, init_pose=None, max_iterations=100, tolerance=0.01):
         distances: Euclidean distances (errors) of the nearest neighbor
         i: number of iterations to converge
     '''
-    
+
+    if (max_iterations <= 0):
+        return init_pose, 0,0
+
     # get number of dimensions
     m = A.shape[1]
 
@@ -112,7 +116,7 @@ def icp(A, B, init_pose=None, max_iterations=100, tolerance=0.01):
 
     # calculate final transformation
     T,_,_ = best_fit_transform(A, src[:m,:].T)
-
+    
     return T, distances, i
 
 '''

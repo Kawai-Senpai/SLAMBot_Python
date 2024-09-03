@@ -1,38 +1,58 @@
-from plotter import plot
+import numpy as np
+import matplotlib.pyplot as plt
 
-reading = {'f': [436, 449, 438, 431, 414, 429, 425, 405, 403, 400, 397, 386, 387, 383, 383, 377, 380, 373, 367, 366, 359, 360, 361, 355, 352, 350, 353, 348, 344, 340, 339, 340, 341, 342, 342, 339, 341, 337, 338, 336, 341, 334, 337, 338, 336, 335, 331, 332, 337, 340, 340, 341, 340, 350, 348, 343, 347, 350, 351, 348, 352, 353, 369, 359, 366, 361, 359, 369, 379, 378, 369, 371, 381, 390, 393, 392, 392, 404, 404, 407, 408, 414, 426, 438, 443, 445, 434, 441, 450, 475, 469, 459, 455, 467, 486, 515, 501, 543, 0, 0, 0]}
+# Initialize occupancy grid (e.g., 100x100 grid with 0.5 as unknown)
+occupancy_grid = np.full((100, 100), 0.5)
 
-coordinates = plot(reading, 40, 140, 101) # -----> [(x1, y1), (x2, y2), ... ]
-
-for i in coordinates:
-    #print in red
-    print("\033[91m", i)
-
-'''import time
-import threading
-
-class A(threading.Thread):
+def update_grid(grid, pose, scan_data):
+    """
+    Update the occupancy grid with new scan data.
+    grid: Occupancy grid (2D numpy array).
+    pose: Current robot pose (x, y, theta).
+    scan_data: List of (distance, angle) tuples.
+    """
+    x, y, theta = pose
+    for distance, angle in scan_data:
+        # Convert polar to cartesian
+        scan_x = x + distance * np.cos(theta + angle)
+        scan_y = y + distance * np.sin(theta + angle)
         
-        def __init__(self):
-            threading.Thread.__init__(self)
+        # Update occupancy grid
+        grid_x = int(scan_x) + grid.shape[0] // 2
+        grid_y = int(scan_y) + grid.shape[1] // 2
+        if 0 <= grid_x < grid.shape[0] and 0 <= grid_y < grid.shape[1]:
+            grid[grid_x, grid_y] = 1  # Mark as occupied
 
-        def run(self):
-            for i in range(10):
-                print("A --> ", i)
-                time.sleep(1)
+    return grid
 
-class B(threading.Thread):
+def detect_loop_closure(current_pose, past_poses, threshold=1.0):
+    """
+    Detect loop closure by comparing the current pose with past poses.
+    current_pose: Current robot pose (x, y, theta).
+    past_poses: List of previous poses.
+    threshold: Distance threshold for loop closure detection.
+    """
+    for past_pose in past_poses:
+        distance = np.linalg.norm(np.array(current_pose[:2]) - np.array(past_pose[:2]))
+        if distance < threshold:
+            return True, past_pose
+    return False, None
 
-        def __init__(self):
-            threading.Thread.__init__(self)
+# Example of robot movement and map update
+pose = (0, 0, 0)  # Initial pose (x, y, theta)
+scan_data = [(5, np.pi/4), (10, -np.pi/4)]  # Example scan data (distance, angle)
+occupancy_grid = update_grid(occupancy_grid, pose, scan_data)
 
-        def run(self):
-            for i in range(10):
-                print("B --> ", i)
-                time.sleep(1)
+# Simulate movement
+poses = [(0, 0, 0), (5, 0, np.pi/6), (10, 5, np.pi/4), (0, 0, 0)]  # Simulated path
 
-obj_a = A()
-obj_b = B()
+for i, pose in enumerate(poses):
+    occupancy_grid = update_grid(occupancy_grid, pose, scan_data)
+    
+    # Detect loop closure
+    loop_detected, matching_pose = detect_loop_closure(pose, poses[:i])
+    if loop_detected:
+        print(f"Loop closure detected with pose {matching_pose}")
 
-obj_a.start()
-obj_b.start()'''
+plt.imshow(occupancy_grid, cmap='gray')
+plt.show()

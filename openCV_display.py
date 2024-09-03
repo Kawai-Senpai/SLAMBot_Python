@@ -130,7 +130,7 @@ def process_frame_path(frame, colormap, robot_cell=None, robot_rotation=None, en
             arrow_x = int(arrow_length * np.sin(robot_rotation))
             arrow_y = int(arrow_length * np.cos(robot_rotation))
             cv2.arrowedLine(frame_normalized, (robot_pose_grid_x, robot_pose_grid_y), (robot_pose_grid_x + arrow_x, robot_pose_grid_y + arrow_y), (0, 0, 255), 1)
-        '''
+    '''
     #add end cell
     if(end_cell):
         end_pose_grid_x, end_pose_grid_y = end_cell

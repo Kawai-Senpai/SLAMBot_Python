@@ -4,7 +4,6 @@ import numpy as np
 #import pytorch
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 
 #! Callibration Model ------------------------------------------------------------------
@@ -147,8 +146,9 @@ def plot(data, front_start, front_end, num_readings, fix_error = 0, servo_offset
     return zip(x_coords, y_coords)
 
 #! Occupancy Grid Mapping --------------------------------------------------------------
+
 #? Probabilistic Occupancy Grid Mapping (POGM) With Temporal Filtering ----------------------------
-def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.7):
+def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.7, coordinate_filter_percent=0.1, coordinate_move_percent=0.25, clump_decay=0.05):
     
     """
     Update the occupancy grid map based on the given coordinates.
@@ -162,6 +162,11 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
     Returns:
     - occupancy_grid: An updated occupancy grid map.
     """
+
+    filtered_coordinates = []
+    updated_coordinate_indexes = []
+    updated_coordinate_values = []
+    updated_grid_indexes = []
 
     #* Temporal filter to reduce noise ( on past occupancy grids ) ------------------------
     # Avarage the last N occupancy grids to reduce noise (latest map has the highest weight) - weigted average
@@ -180,8 +185,8 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
     #*Plotting probabilistic occupancy grid map ------------------------------------------
     for x, y in coordinates:
         # Calculate grid indices
-        grid_x = int(round(x / CELL_SIZE) + map_width / 2)
-        grid_y = int(round(y / CELL_SIZE) + map_height / 2)
+        grid_x = int((x // CELL_SIZE) + map_width / 2)
+        grid_y = int((y // CELL_SIZE) + map_height / 2)
 
         '''# Check if the indices are within the grid bounds
         if 0 <= grid_x < map_width and 0 <= grid_y < map_height:
@@ -193,7 +198,54 @@ def update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupan
             # Mark the cell as occupied
             occupancy_grid[grid_x, grid_y] = alpha * occupancy_grid[grid_x, grid_y] + (1 - alpha) * 1
 
-    return occupancy_grid
+            updated_coordinate_indexes.append((x, y))
+            updated_coordinate_values.append(occupancy_grid[grid_x, grid_y])
+            updated_grid_indexes.append((grid_x, grid_y))
+
+    #* Filter coordinates based on the percentage of the grid that has been updated ---------
+    min_value = np.min(updated_coordinate_values)
+    max_value = np.max(updated_coordinate_values)
+    threshold = min_value + (max_value - min_value) * coordinate_filter_percent
+
+    print("min and max value in occ_grid: ", min_value, max_value)
+    print("threshold calculated: ", threshold)
+
+    for i in range(len(updated_coordinate_indexes)):
+
+        x, y = updated_grid_indexes[i]
+
+        is_considred = False
+        #filter coordinates based on threshold
+        if updated_coordinate_values[i] > threshold:
+            filtered_coordinates.append((updated_coordinate_indexes[i][0], updated_coordinate_indexes[i][1]))
+            is_considred = True
+
+        # Decay surrounding cells (if index not in updated_coordinate_indexes) [of occupancy grid]
+
+        max_surrounding_prob = 0
+        surrounding_prob_index = None
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                nx, ny = int(x + dx), int(y + dy)
+                if 0 <= nx < occupancy_grid.shape[0] and 0 <= ny < occupancy_grid.shape[1]:
+
+                    if (nx, ny) not in updated_grid_indexes:
+                        occupancy_grid[nx, ny] = occupancy_grid[nx, ny] * (1 - clump_decay)
+                    
+                    if not is_considred:
+                        if occupancy_grid[nx, ny] > max_surrounding_prob:
+                            max_surrounding_prob = occupancy_grid[nx, ny]
+                            surrounding_prob_index = (nx, ny)
+
+        if not is_considred and surrounding_prob_index is not None and max_surrounding_prob > threshold:
+            #find out direction w.r.t x, y
+            x_diff = surrounding_prob_index[0] - x
+            y_diff = surrounding_prob_index[1] - y
+
+            #move towards the direction
+            filtered_coordinates.append((updated_coordinate_indexes[i][0] + (x_diff*coordinate_move_percent), updated_coordinate_indexes[i][1] + (y_diff*coordinate_move_percent) ))
+
+    return occupancy_grid, filtered_coordinates
 
 #? Find points between two coordinates -------------------------------------------------
 
@@ -249,14 +301,14 @@ def update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_
     robot_rotation = np.rad2deg(robot_rotation)
 
     # Calculate grid indices for the robot
-    robot_grid_x = int(round(robot_x / CELL_SIZE) + map_width / 2)
-    robot_grid_y = int(round(robot_y / CELL_SIZE) + map_height / 2)
+    robot_grid_x = int((robot_x // CELL_SIZE) + map_width / 2)
+    robot_grid_y = int((robot_y // CELL_SIZE) + map_height / 2)
 
     #* Plotting wall ( obstacles ) ---------------------------------------------------------
     for x, y in coordinates:
         # Calculate grid indices for the wall
-        grid_x = int(round(x / CELL_SIZE) + map_width / 2)
-        grid_y = int(round(y / CELL_SIZE) + map_height / 2)
+        grid_x = int((x // CELL_SIZE) + map_width / 2)
+        grid_y = int((y // CELL_SIZE) + map_height / 2)
 
         #* Finding free space cells using bresenham algorithm --------------------------------
         # Get the points along the ray from the robot to the wall
@@ -294,3 +346,6 @@ def transform_matrix(T, A):
 def transform_matrix_inverse(T, A):
     T_inv = np.linalg.inv(T)
     return np.dot(T_inv, A)
+
+def homogeneous_inbetween(T1, T2, alpha):
+    return np.dot(T1, np.linalg.matrix_power(np.dot(np.linalg.inv(T1), T2), alpha))

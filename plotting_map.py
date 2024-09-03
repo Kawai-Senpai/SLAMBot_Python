@@ -1,15 +1,12 @@
 import socket
 import json
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-from plotter import plot, transform_points, transform_points_inverse, transform_matrix, update_occupancy_grid, update_free_space_grid
+from plotter import plot, transform_points_inverse, update_occupancy_grid, update_free_space_grid
 from particle_filter import icp
-from openCV_display import process_frame, process_frame_path
-from movement import generate_movement_commands
-from path_finding import astar
+from openCV_display import process_frame
+from movement import left, make_init_pose
 import threading
-import keyboard
 import time
 
 #? Variables -----------------------
@@ -18,6 +15,8 @@ import time
 # Constants
 FOV_DEGREES = 101
 NUM_READINGS = 101
+START_DEGREE = 40
+END_DEGREE = 140
 CELL_SIZE = 2
 WINDOW_SIZE = 5
 
@@ -28,14 +27,18 @@ occupancy_grids = [np.zeros((map_height, map_width))]
 free_space_grids = [np.zeros((map_height, map_width))]
 path_grid = np.zeros((map_height, map_width))
 
-probability_filter = 0
+probability_filter = 0.2
+probability_filter_extent = 2 #! Should be less than WINDOW_SIZE
+
+erotion_extent = 2
+erosion_kernel = np.ones((3, 3), np.uint8)
 
 #ICP
-icp_iterations = 2
+icp_iterations = 1
 icp_tolerance = 0.0001
 
 #display
-display_scale = 6
+display_scale = 5
 guide_color = (225, 86, 43)
 
 #! Self port ----------------------
@@ -88,8 +91,8 @@ simplified_path = None
 
 #! Movement ------------------------
 
-wait_time = 5  #seconds - waiting for the robot to reach the target
-wait_to_send = 0.5 #wait time to send data
+wait_time = 20  #seconds - waiting for the robot to reach the target
+wait_to_send = 1 #wait time to send data
 
 #? Functions & Classes --------------
 #! Threads --------------------------
@@ -122,6 +125,7 @@ class UpdateGrids(threading.Thread):
         global robot_cell
         global robot_rotation
         global init_pose
+        global erotion_extent
 
         while True:
 
@@ -151,7 +155,7 @@ class UpdateGrids(threading.Thread):
                 #! Calculations ---------------------------------------------------
 
                 #* Calculate (x, y) coordinates of the LiDAR points ---------------
-                coordinates = plot(data, 40, 140, NUM_READINGS) # -----> [(x1, y1), (x2, y2), ... ]
+                coordinates = plot(data, START_DEGREE, END_DEGREE, NUM_READINGS) # -----> [(x1, y1), (x2, y2), ... ]
 
                 #* Mapping & Particle Filtring ------------------------------------
                 if(previous_coordinates):
@@ -173,13 +177,13 @@ class UpdateGrids(threading.Thread):
                     
                     if init_pose is not None:
                         #calculate initial pose w.r.t the robot
-                        init_pose = np.dot(robot_pose, init_pose)
+                        init_pose = np.linalg.inv(np.dot(robot_pose, init_pose))
                         #* ICP ( Particle filtering)
                         T_final, distances, iterations = icp(A, B, init_pose=init_pose, max_iterations=icp_iterations, tolerance=icp_tolerance)
                         init_pose = None
                     else:
                         #* ICP ( Particle filtering)
-                        T_final, distances, iterations = icp(A, B, max_iterations=icp_iterations, tolerance=icp_tolerance)
+                        T_final, distances, iterations = icp(A, B, init_pose=np.linalg.inv(robot_pose), max_iterations=icp_iterations, tolerance=icp_tolerance)
                     
                     #inverse of T
                     T_inv = np.linalg.inv(T_final)
@@ -188,26 +192,39 @@ class UpdateGrids(threading.Thread):
                     #* Fix Robot pose and new coordinates using the transformation matrix
                     # Fixing coordinates
                     B = transform_points_inverse(T_final, B)
-                    coordinates = B
+                    coordinates = B # -----> [(x1, y1), (x2, y2), ... ]
 
                     #new robot pose
                     robot_pose = T_inv
                 
-                #* Storing Each Measurement History -------------------------------
-                # Update past coordinates
-                # Window size determines how many previous measurements to consider
-                previous_coordinates.append(np.array(list(coordinates)))
-                if len(previous_coordinates) > WINDOW_SIZE:
-                    previous_coordinates.pop(0)
-                
                 #* Update the occupancy grid map ----------------------------------
-                occupancy_grid, _ = update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.9)
+                occupancy_grid, filtered_coordinates = update_occupancy_grid(coordinates, map_height, map_width, CELL_SIZE, occupancy_grids, alpha=0.9)
 
                 #* Storing the calculated occupancy grid in history ---------------
                 # Update past occupancy grids
                 occupancy_grids.append(occupancy_grid)
                 if(len(occupancy_grids) > WINDOW_SIZE):
                     occupancy_grids.pop(0)
+
+                    for i in range(erotion_extent):
+                        #Erode the map
+                        occupancy_grids[i] = (occupancy_grids[i] + cv2.erode(occupancy_grids[i], erosion_kernel, iterations=1))/2
+
+                    for i in range(probability_filter_extent):
+                        #Remove low probability cells from older grids
+                        min_value = np.min(occupancy_grids[i])
+                        max_value = np.max(occupancy_grids[i])
+                        threshold = min_value + (max_value - min_value) * probability_filter
+                        occupancy_grids[i][occupancy_grids[i] < threshold] = 0
+                    
+
+                #* Storing Each Measurement History -------------------------------
+                # Update past coordinates
+                # Window size determines how many previous measurements to consider
+
+                previous_coordinates.append(np.array(list(filtered_coordinates)))
+                if len(previous_coordinates) > WINDOW_SIZE:
+                    previous_coordinates.pop(0)
 
                 #* Update the free space grid map ----------------------------------
                 free_space_grid, robot_cell, robot_rotation = update_free_space_grid(robot_pose, coordinates, map_height, map_width, CELL_SIZE, free_space_grids, alpha=0.9)
@@ -221,9 +238,13 @@ class UpdateGrids(threading.Thread):
                 if(len(free_space_grids) > WINDOW_SIZE):
                     free_space_grids.pop(0)
 
-                #filter out cells with low probability
-                occupancy_grid[occupancy_grid < probability_filter] = 0
-                free_space_grid[free_space_grid < probability_filter] = 0
+                    for i in range(probability_filter_extent):
+                        #Remove low probability cells from older grids
+
+                        min_value = np.min(free_space_grids[i])
+                        max_value = np.max(free_space_grids[i])
+                        threshold = min_value + (max_value - min_value) * probability_filter
+                        free_space_grids[i][free_space_grids[i] < threshold] = 0
 
             except BlockingIOError:
                 # No data is available, skip
@@ -257,84 +278,15 @@ class Display(threading.Thread):
 
                     processed_occupancy_grid = process_frame(occupancy_grid, cv2.COLORMAP_JET, robot_cell, robot_rotation, display_scale, guide_color)
                     processed_free_space_grid = process_frame(free_space_grid, cv2.COLOR_GRAY2BGR, robot_cell, robot_rotation, display_scale, guide_color)
-                    processed_path_grid = process_frame_path(free_space_grid, cv2.COLOR_BGR2GRAY, robot_cell, robot_rotation, end_cell, simplified_path, display_scale, guide_color)
-                    
+                
                     #* Display ---------------------------------------------------------------
                     # Display the occupancy grid map
                     cv2.imshow('Occupancy Grid Map', processed_occupancy_grid)
                     cv2.imshow('Free Space Grid Map', processed_free_space_grid)
-                    cv2.imshow('Path Grid Map', processed_path_grid)
 
                     if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
                         cv2.destroyAllWindows()  # Close all OpenCV windows
                         break  # Exit the loop
-
-class SendData(threading.Thread):
-    
-        def __init__(self):
-            threading.Thread.__init__(self)
-    
-        def run(self):
-    
-            global espIP
-            global espPort
-            global serverSocket
-    
-            while True:
-
-                if keyboard.is_pressed('s'):
-
-                    print("Key 's' is pressed, entering manual mode")
-
-                    if espIP is not None:
-
-                        to_send = input("Enter the data to send: ")
-                        # [f,l,r,b] -> [front, back, left, right, stop] -> [0,1,2,3,4] followed by number (int)
-                        to_send = to_send.split()
-                        payload = {
-                            "d": int(to_send[0]), #direction
-                            "t": int(to_send[1]), #time
-                            "s": int(to_send[2]), #speed
-                        }
-                        payload = json.dumps(payload)
-                        print(f"Sending data to ESP32: {payload}")
-                        serverSocket.sendto(payload.encode('utf-8'), (espIP, espPort))
-
-class PathFinder(threading.Thread):
-        
-    def __init__(self):
-        threading.Thread.__init__(self)
-
-    def run(self):
-
-        global robot_cell
-        global robot_rotation
-        global occupancy_grids
-        global free_space_grids
-        global map_height
-        global map_width
-        global CELL_SIZE
-        global WINDOW_SIZE
-        global probability_filter
-        global end_coordinate
-        global end_cell
-        global path
-        global simplified_path
-
-        while True:
-
-            #* Calculating goal position (cell) in free space grid
-            end_x, end_y = end_coordinate
-            # Calculate grid indices for the end
-            end_cell = (int(round(end_x / CELL_SIZE) + map_width / 2), int(round(end_y / CELL_SIZE) + map_height / 2))
-            
-            path, simplified_path = astar(robot_cell, end_cell, free_space_grids[-1], map_height, map_width)
-            
-    def send_data(self, payload):
-        if espIP is not None:
-            payload = json.dumps(payload)
-            print(f"Sending data to ESP32: {payload}")
-            serverSocket.sendto(payload.encode('utf-8'), (espIP, espPort))
 
 class Movement(threading.Thread):
         
@@ -353,25 +305,44 @@ class Movement(threading.Thread):
             global wait_time
             global robot_rotation
             global init_pose
-            global wait_time
+            global robot_pose
+            global occupancy_grids
+            global free_space_grids
+
+            rotation_amount_scan = 20
+
+            starting_rotation = np.rad2deg(np.arctan2(robot_pose[1, 0], robot_pose[0, 0]))
+            movement_counter = 0
+            max_movements_before_check = 5
 
             while True:
-                if simplified_path:
-                    command, approx_pose = generate_movement_commands(simplified_path, robot_rotation)
-                    if command:
-                        #print in yellow color
-                        print("\033[93m", "Command: ", command, "\033[0m")
-                        self.send_data(command)
-                        time.sleep(wait_time)
-                        init_pose = approx_pose
-                        time.sleep(command['t']/1000+wait_time)
+
+                if movement_counter >= max_movements_before_check:
+                    current_rotation = np.rad2deg(np.arctan2(robot_pose[1, 0], robot_pose[0, 0]))
+                    if abs(current_rotation - starting_rotation) < 10:
+                        print("Reached the starting rotation")
+                        break
+                    else:
+                        print("Current Rotation, Still Scanning: ", current_rotation)
+
+                command = left(rotation_amount_scan)
+                if command:
+                    #print in yellow color
+                    print("\033[93m", "Command: ", command, "\033[0m")
+                    self.send_data(command)
+                    time.sleep(wait_to_send)
+                    init_pose = make_init_pose(0, 0, rotation_amount_scan)
+                    movement_counter += 1
+                    time.sleep(command['t']/1000+wait_time)
+
+            #Save the occupancy grid map & free space grid map
+            np.save('Map/occupancy_grid.npy', occupancy_grids)
+            np.save('Map/free_space_grid.npy', free_space_grids)
 
 #? Threads, Creating Objects ---------------------------
 
 update_grid_thread = UpdateGrids()
 display_thread = Display()
-send_data_thread = SendData()
-path_finder_thread = PathFinder()
 movement_thread = Movement()
 
 #? Starting Threads -------------------------------------
@@ -387,17 +358,7 @@ print("\033[91mStarting 'display_thread' **********************************\033[
 #! Starting thread - that displays the grids
 display_thread.start()
 
-print("\033[91mStarting 'send_data_thread' ********************************\033[0m")
-
-#! Starting thread - that sends data to the ESP32 (This is for manual control, Not needed for autonomous control)
-send_data_thread.start()
-
-print("\033[91mStarting 'path_finder_thread' ******************************\033[0m")
-
-#! Starting thread - that finds the path
-path_finder_thread.start()
-
-time.sleep(30)
+time.sleep(15)
 
 print("\033[91mStarting 'movement_thread' *********************************\033[0m")
 

@@ -28,6 +28,8 @@
 
 #define SPEED 33
 
+const int wait_time = 100;
+
 const int freq = 5000; // Frequency in Hz
 const int ledChannel = 3; // PWM channel
 const int resolution = 8; // PWM resolution (8-bit)
@@ -47,7 +49,7 @@ const char* router_ssid = "The Creep Next Door";
 const char* router_password = "IWon'tTellYouThough!";
 
 // Socket server IP and port
-const char* router_ip = "192.168.0.167";
+const char* router_ip = "192.168.0.135";
 const int router_port = 1234;
 
 //receiving port
@@ -197,7 +199,8 @@ void scanMoveTask(void *pvParameters) {
         forward = false;
         //! Forward Motion -------------------------------
         // rotates from 0 degrees to n degrees
-
+        servoMotor.write(flipAngle(SERVO_START));
+        delay(wait_time);
         for (int pos = SERVO_START; pos <= SERVO_END; pos += 1) {
           // in steps of 1 degree
           servoMotor.write(flipAngle(pos));
@@ -222,10 +225,10 @@ void scanMoveTask(void *pvParameters) {
       else 
       {
         forward = true;
-
         //! Backward Motion ------------------------------
         // rotates from n degrees to 0 degrees
-
+        servoMotor.write(flipAngle(SERVO_END));
+        delay(wait_time);
         for (int pos = SERVO_END; pos >= SERVO_START; pos -= 1) {
           servoMotor.write(flipAngle(pos));
           front[pos] = getDistence();
@@ -331,6 +334,7 @@ int getDistence()
 void moveForward(int duration, int speed)
 {
   moving = true;
+  delay(wait_time);
   digitalWrite(PIN1, LOW);
   digitalWrite(PIN2, HIGH);
   digitalWrite(PIN3, LOW);
@@ -341,12 +345,14 @@ void moveForward(int duration, int speed)
   delay(duration);
 
   stop();
+  delay(wait_time);
   moving = false;
 }
 
 void moveBackward(int duration, int speed)
 {
   moving = true;
+  delay(wait_time);
   digitalWrite(PIN1, HIGH);
   digitalWrite(PIN2, LOW);
   digitalWrite(PIN3, HIGH);
@@ -357,12 +363,14 @@ void moveBackward(int duration, int speed)
   delay(duration);
 
   stop();
+  delay(wait_time);
   moving = false;
 }
 
 void moveRight(int duration, int speed)
 {
   moving = true;
+  delay(wait_time);
   digitalWrite(PIN1, HIGH);
   digitalWrite(PIN2, LOW);
   digitalWrite(PIN3, LOW);
@@ -373,12 +381,14 @@ void moveRight(int duration, int speed)
   delay(duration);
 
   stop();
+  delay(wait_time);
   moving = false;
 }
 
 void moveLeft(int duration, int speed)
 {
   moving = true;
+  delay(wait_time);
   digitalWrite(PIN1, LOW);
   digitalWrite(PIN2, HIGH);
   digitalWrite(PIN3, HIGH);
@@ -389,6 +399,7 @@ void moveLeft(int duration, int speed)
   delay(duration);
 
   stop();
+  delay(wait_time);
   moving = false;
 }
 
